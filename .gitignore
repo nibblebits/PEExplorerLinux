@@ -1,0 +1,4 @@
+*.o
+bin/bucket.exe
+bin/main
+.vscode/*
