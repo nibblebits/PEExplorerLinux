@@ -80,10 +80,26 @@ out:
     return status;
 }
 
+static PE_STATUS pefile_load_optional_header_data_directories(FILE *f, struct pefile *file, size_t *to_read)
+{
+    PE_STATUS status = PE_STATUS_OK;
+    int res = -1;
+
+    uint32_t total = file->optional_header.image_fields.number_of_rva_and_sizes;
+    struct pefile_pe_data_directory *data_directories = (struct pefile_pe_data_directory *)calloc(sizeof(struct pefile_pe_data_directory), total);
+    for (int i = 0; i < total; i++)
+    {
+        FREAD_OR_FAIL(&data_directories[i], sizeof(struct pefile_pe_data_directory), f, status, out);
+    }
+
+    file->optional_header.data_directories = data_directories;
+out:
+    return status;
+}
+
+
 static PE_STATUS pefile_load_optional_header(FILE *f, struct pefile *file)
 {
-    printf("%i\n", (int)ftell(f));
-
     PE_STATUS status = PE_STATUS_OK;
     int res = -1;
     size_t to_read = file->pe_header.size_of_optional_header;
@@ -106,7 +122,18 @@ static PE_STATUS pefile_load_optional_header(FILE *f, struct pefile *file)
     }
 
     // Load the image fields
-    pefile_load_optional_header_image_fields(f, file, &to_read);
+    status = pefile_load_optional_header_image_fields(f, file, &to_read);
+    if (status != PE_STATUS_OK)
+    {
+        goto out;
+    }
+
+    // Load the data directories
+    status = pefile_load_optional_header_data_directories(f, file, &to_read);
+    if (status != PE_STATUS_OK)
+    {
+        goto out;
+    }
 
 out:
     return status;
@@ -173,7 +200,6 @@ PE_STATUS pefile_load(const char *filename, const char *mode, struct pefile *fil
     status = pefile_load_optional_header(f, file);
     if (status != PE_STATUS_OK)
         goto out;
-    
 
 out:
     return status;

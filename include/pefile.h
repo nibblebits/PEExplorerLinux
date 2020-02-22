@@ -139,6 +139,13 @@ struct pefile_pe_optional_header
     struct pefile_pe_optional_header_standard_fields standard_fields;
     uint32_t base_of_data;
     struct pefile_pe_optional_header_image_specific_fields image_fields;
+    struct pefile_pe_data_directory* data_directories;
+};
+
+struct pefile_pe_data_directory
+{
+    uint32_t virtual_address;
+    uint32_t size;
 };
 
 struct pefile
