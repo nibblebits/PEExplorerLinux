@@ -2,6 +2,8 @@
 #define PEFILE_H
 #include <stdint.h>
 
+
+
 #define PE_SIGNATURE_SIZE 4
 
 #define PE_CHARACTERISTIC_FILE_EXECUTEABLE 0x02
@@ -19,13 +21,35 @@
 #define PE_CHARACTERISTIC_UP_MACHINE_ONLY 0x4000
 #define PE_CHARACTERISTIC_BYTES_OF_MACHINE_WORD_RESERVED_HIGH 0x8000
 
-#define PE_CHECK_CHARACTERISTIC_LEAVE_IF_FOUND(c, result, flag, message, out)  \
-    if (*c & flag)   \
-    {                                              \
-        result = message;          \
-        *c &= ~flag; \
-        goto out; \
-    } 
+#define PE_CHECK_CHARACTERISTIC_LEAVE_IF_FOUND(c, result, flag, message, out) \
+    if (*c & flag)                                                            \
+    {                                                                         \
+        result = message;                                                     \
+        *c &= ~flag;                                                          \
+        goto out;                                                             \
+    }
+
+
+
+/**
+ * Reads from the provided file and on failure changes the provided status
+ * and jumps to out.
+ */
+#define FREAD_OR_FAIL(dst, size, file, status, out) \
+   {\
+     int res = fread(dst, size, 1, file);   \
+     if (!res) \
+     {\
+       status = PE_STATUS_READ_FAILURE;\
+       goto out; \
+     }  \
+   } \
+
+
+#define PE_FILE_NORMAL_EXECUTABLE 0x10B
+#define PE_FILE_ROM_IMAGE  0x107
+#define PE_FILE_PE32_PLUS 0x20B
+
 
 typedef uint16_t PE_STATUS;
 enum
@@ -33,7 +57,9 @@ enum
     PE_STATUS_OK,
     PE_STATUS_DOS_HEADER_READ_FAILURE,
     PE_STATUS_INVALID_PE_FILE,
-    PE_STATUS_READ_FAILURE
+    PE_STATUS_READ_FAILURE,
+    PE_STATUS_OPTIONAL_HEADER_BAD_MAGIC,
+    PE_STATUS_NO_OPTIONAL_HEADER
 };
 
 struct pefile_dos_header
@@ -70,10 +96,56 @@ struct pefile_pe_header
     uint16_t characteristics;
 };
 
+struct pefile_pe_optional_header_standard_fields
+{
+    uint16_t magic;
+    uint8_t major_linker_version;
+    uint8_t minor_linker_version;
+    uint32_t size_of_code;
+    uint32_t size_of_initialized_data;
+    uint32_t size_of_uninitialized_data;
+    uint32_t address_of_entry_point;
+    uint32_t base_of_code;
+};
+
+struct pefile_pe_optional_header_image_specific_fields
+{
+    uint32_t image_base;
+    uint32_t section_alignment;
+    uint32_t file_alignment;
+    uint16_t major_operating_system_version;
+    uint16_t minor_operating_system_version;
+    uint16_t major_image_version;
+    uint16_t minor_image_version;
+    uint16_t major_subsystem_version;
+    uint16_t minor_subsystem_version;
+    uint32_t win32_version_value;
+    uint32_t size_of_image;
+    uint32_t size_of_headers;
+    uint32_t checksum;
+    uint16_t subsystem;
+    uint16_t dll_characteristics;
+    uint32_t size_of_stack_reserve;
+    uint32_t size_of_stack_commit;
+    uint32_t size_of_heap_reserve;
+    uint32_t size_of_heap_commit;
+    uint32_t loader_flags;
+    uint32_t number_of_rva_and_sizes;
+};
+
+struct pefile_pe_optional_header
+{
+
+    struct pefile_pe_optional_header_standard_fields standard_fields;
+    uint32_t base_of_data;
+    struct pefile_pe_optional_header_image_specific_fields image_fields;
+};
+
 struct pefile
 {
     struct pefile_dos_header dos_header;
     struct pefile_pe_header pe_header;
+    struct pefile_pe_optional_header optional_header;
 };
 
 void pefile_init(struct pefile *file);

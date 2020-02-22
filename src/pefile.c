@@ -2,6 +2,7 @@
 #include <memory.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 const char *pefile_characteristic(uint16_t *c)
 {
@@ -29,6 +30,86 @@ out:
 void pefile_init(struct pefile *file)
 {
     memset(file, 0, sizeof(struct pefile));
+}
+
+static bool pefile_valid_optional_magic(uint16_t magic)
+{
+    return magic == PE_FILE_NORMAL_EXECUTABLE || magic == PE_FILE_ROM_IMAGE || magic == PE_FILE_PE32_PLUS;
+}
+
+static PE_STATUS pefile_load_optional_header_standard_fields(FILE *f, struct pefile *file, size_t *to_read)
+{
+    PE_STATUS status = PE_STATUS_OK;
+    int res = -1;
+
+    if (*to_read < sizeof(file->optional_header.standard_fields))
+    {
+        status = PE_STATUS_NO_OPTIONAL_HEADER;
+        goto out;
+    }
+
+    // Read in the standard fields
+    FREAD_OR_FAIL(&file->optional_header.standard_fields, sizeof(file->optional_header.standard_fields), f, status, out);
+
+    *to_read -= sizeof(file->optional_header.standard_fields);
+
+    if (!pefile_valid_optional_magic(file->optional_header.standard_fields.magic))
+    {
+        status = PE_STATUS_OPTIONAL_HEADER_BAD_MAGIC;
+        goto out;
+    }
+
+out:
+    return status;
+}
+
+static PE_STATUS pefile_load_optional_header_image_fields(FILE *f, struct pefile *file, size_t *to_read)
+{
+    PE_STATUS status = PE_STATUS_OK;
+    int res = -1;
+    if (*to_read < sizeof(file->optional_header.image_fields))
+    {
+        // No image fields available
+        goto out;
+    }
+
+    // Read the image fields
+    FREAD_OR_FAIL(&file->optional_header.image_fields, sizeof(file->optional_header.image_fields), f, status, out);
+
+out:
+    return status;
+}
+
+static PE_STATUS pefile_load_optional_header(FILE *f, struct pefile *file)
+{
+    printf("%i\n", (int)ftell(f));
+
+    PE_STATUS status = PE_STATUS_OK;
+    int res = -1;
+    size_t to_read = file->pe_header.size_of_optional_header;
+    status = pefile_load_optional_header_standard_fields(f, file, &to_read);
+    if (status != PE_STATUS_OK)
+    {
+        goto out;
+    }
+
+    if (file->optional_header.standard_fields.magic != PE_FILE_PE32_PLUS)
+    {
+        // Data field must be present
+        FREAD_OR_FAIL(&file->optional_header.base_of_data, sizeof(file->optional_header.base_of_data), f, status, out);
+    }
+
+    if (to_read < sizeof(file->optional_header.image_fields))
+    {
+        // No image fields available
+        goto out;
+    }
+
+    // Load the image fields
+    pefile_load_optional_header_image_fields(f, file, &to_read);
+
+out:
+    return status;
 }
 
 static PE_STATUS pefile_load_dos_header(FILE *f, struct pefile *file)
@@ -71,12 +152,7 @@ static PE_STATUS pefile_load_pe_header(FILE *f, struct pefile *file)
     }
 
     // Let's load the PE file header
-    res = fread(&file->pe_header, sizeof(file->pe_header), 1, f);
-    if (res != 1)
-    {
-        status = PE_STATUS_READ_FAILURE;
-        goto out;
-    }
+    FREAD_OR_FAIL(&file->pe_header, sizeof(file->pe_header), f, status, out);
 
 out:
     return status;
@@ -91,8 +167,13 @@ PE_STATUS pefile_load(const char *filename, const char *mode, struct pefile *fil
         goto out;
 
     status = pefile_load_pe_header(f, file);
-    if (!status)
+    if (status != PE_STATUS_OK)
         goto out;
+
+    status = pefile_load_optional_header(f, file);
+    if (status != PE_STATUS_OK)
+        goto out;
+    
 
 out:
     return status;
