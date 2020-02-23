@@ -97,7 +97,6 @@ out:
     return status;
 }
 
-
 static PE_STATUS pefile_load_optional_header(FILE *f, struct pefile *file)
 {
     PE_STATUS status = PE_STATUS_OK;
@@ -139,6 +138,22 @@ out:
     return status;
 }
 
+static PE_STATUS pefile_load_section_headers(FILE *f, struct pefile *file)
+{
+    PE_STATUS status = PE_STATUS_OK;
+    int res = -1;
+
+    struct pefile_section_header *headers = (struct pefile_section_header *)calloc(sizeof(struct pefile_section_header), file->pe_header.number_of_sections);
+    for (int i = 0; i < file->pe_header.number_of_sections; i++)
+    {
+        FREAD_OR_FAIL(&headers[i], sizeof(struct pefile_section_header), f, status, out);
+    }
+
+    file->section_headers = headers;
+out:
+    return status;
+}
+
 static PE_STATUS pefile_load_dos_header(FILE *f, struct pefile *file)
 {
     PE_STATUS status = PE_STATUS_OK;
@@ -172,7 +187,7 @@ static PE_STATUS pefile_load_pe_header(FILE *f, struct pefile *file)
         goto out;
     }
 
-    if (*((uint32_t *)sig) != 0x4550)
+    if (*((uint32_t *)sig) != PE_SIGNATURE)
     {
         status = PE_STATUS_INVALID_PE_FILE;
         goto out;
@@ -198,6 +213,10 @@ PE_STATUS pefile_load(const char *filename, const char *mode, struct pefile *fil
         goto out;
 
     status = pefile_load_optional_header(f, file);
+    if (status != PE_STATUS_OK)
+        goto out;
+
+    status = pefile_load_section_headers(f, file);
     if (status != PE_STATUS_OK)
         goto out;
 
