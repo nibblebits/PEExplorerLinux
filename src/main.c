@@ -25,9 +25,21 @@ int main(int argc, char** argv)
         printf("%s\n", msg);
     }
 
+    struct pefile_section* section = pefile_section_open(&file, "CODE");
+    if (!section)
+    {
+        printf("Failed to open code section\n");
+        return -1;
+    }
 
-    struct pefile_section_header* section = pefile_find_section(&file, "CODE");
-    printf("%s\n", section->name);
+    // Read the first 20 bytes
+    char buf[20];
+    if(pefile_section_read(section, buf, sizeof(buf)) != PE_STATUS_OK)
+    {
+        printf("Failed to read 20 bytes from section\n");
+        return -1;
+    }
+    pefile_section_close(section);
 
     printf("Pointer to PE start=%x\n", (int)file.dos_header.e_lfanew);
 
