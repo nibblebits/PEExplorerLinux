@@ -26,6 +26,9 @@ int main(int argc, char** argv)
     }
 
 
+    struct pefile_section_header* section = pefile_find_section(&file, "CODE");
+    printf("%s\n", section->name);
+
     printf("Pointer to PE start=%x\n", (int)file.dos_header.e_lfanew);
 
 

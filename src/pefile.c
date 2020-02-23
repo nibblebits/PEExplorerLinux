@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 
 const char *pefile_characteristic(uint16_t *c)
 {
@@ -154,6 +155,24 @@ out:
     return status;
 }
 
+struct pefile_section_header* pefile_find_section(struct pefile* file, const char* name)
+{
+    char _name[PE_SECTION_NAME_SIZE];
+    memset(_name, 0, sizeof(_name));
+    memcpy(_name, name, strnlen(name, sizeof(_name)));
+    struct pefile_section_header* ptr = NULL;
+
+    for (int i = 0; i < file->pe_header.number_of_sections; i++)
+    {
+        if (memcmp(_name, file->section_headers[i].name, sizeof(_name)) == 0)
+        {
+            ptr = &file->section_headers[i];
+        }
+    }
+
+    return ptr;
+}
+
 static PE_STATUS pefile_load_dos_header(FILE *f, struct pefile *file)
 {
     PE_STATUS status = PE_STATUS_OK;
@@ -173,6 +192,7 @@ static PE_STATUS pefile_load_dos_header(FILE *f, struct pefile *file)
 out:
     return status;
 }
+
 
 static PE_STATUS pefile_load_pe_header(FILE *f, struct pefile *file)
 {

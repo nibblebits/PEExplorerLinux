@@ -4,6 +4,7 @@
 
 #define PE_SIGNATURE 0x4550
 #define PE_SIGNATURE_SIZE 4
+#define PE_SECTION_NAME_SIZE 8
 
 #define PE_CHARACTERISTIC_FILE_EXECUTEABLE 0x02
 #define PE_CHARACTERISTIC_FILE_IS_DLL 0x2000
@@ -203,6 +204,7 @@ struct pefile
 
 void pefile_init(struct pefile *file);
 PE_STATUS pefile_load(const char *filename, const char *mode, struct pefile *file);
+struct pefile_section_header* pefile_find_section(struct pefile* file, const char* name);
 const char *pefile_characteristic(uint16_t *c);
 
 #endif
