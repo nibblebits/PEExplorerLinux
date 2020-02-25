@@ -1,5 +1,17 @@
 #include <stdio.h>
+#include <memory.h>
 #include "pefile.h"
+
+void virus(int a, int b)
+{
+    a = a + b + 1;
+}
+
+void a()
+{
+
+}
+
 int main(int argc, char** argv)
 {
 
@@ -12,7 +24,7 @@ int main(int argc, char** argv)
 
     struct pefile file;
     pefile_init(&file);
-    if(pefile_load(argv[1], "r", &file) != PE_STATUS_OK)
+    if(pefile_load(argv[1], "rw+", &file) != PE_STATUS_OK)
     {
         printf("Problem reading PE file is it valid?\n");
         return -1;
@@ -25,21 +37,19 @@ int main(int argc, char** argv)
         printf("%s\n", msg);
     }
 
-    struct pefile_section* section = pefile_section_open(&file, "CODE");
-    if (!section)
+
+    // Let's create a new section
+    int _size = (int)((void*)&a - (void*)virus);
+    char buf[_size];
+    memcpy(buf, virus, _size);
+
+    struct pefile_section* section = pefile_section_create(&file, ".cool", buf, sizeof(buf), IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ);
+    if (section)
     {
-        printf("Failed to open code section\n");
-        return -1;
+        file.optional_header.standard_fields.address_of_entry_point = section->header->virtual_address;
+        pefile_save_header(&file);
     }
 
-    // Read the first 20 bytes
-    char buf[20];
-    if(pefile_section_read(section, buf, sizeof(buf)) != PE_STATUS_OK)
-    {
-        printf("Failed to read 20 bytes from section\n");
-        return -1;
-    }
-    pefile_section_close(section);
 
     printf("Pointer to PE start=%x\n", (int)file.dos_header.e_lfanew);
 

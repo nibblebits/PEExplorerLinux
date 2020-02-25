@@ -80,6 +80,30 @@
         }                                           \
     }
 
+/**
+ * Writes to the provided file and on failure changes the provided status
+ * and jumps to out.
+ */
+#define FWRITE_OR_FAIL(dst, size, file, status, out) \
+    {                                                \
+        int res = fwrite(dst, size, 1, file);        \
+        if (res != 1)                                \
+        {                                            \
+            status = PE_STATUS_WRITE_FAILURE;        \
+            goto out;                                \
+        }                                            \
+    }
+
+#define FSEEK_OR_FAIL(file, seek_to, status, out) \
+    {                                             \
+        int res = fseek(file, seek_to, SEEK_SET); \
+        if (res)                                  \
+        {                                         \
+            status = PE_STATUS_WRITE_FAILURE;     \
+            goto out;                             \
+        }                                         \
+    }
+
 #define PE_FILE_NORMAL_EXECUTABLE 0x10B
 #define PE_FILE_ROM_IMAGE 0x107
 #define PE_FILE_PE32_PLUS 0x20B
@@ -91,11 +115,14 @@ enum
     PE_STATUS_DOS_HEADER_READ_FAILURE,
     PE_STATUS_INVALID_PE_FILE,
     PE_STATUS_READ_FAILURE,
+    PE_STATUS_WRITE_FAILURE,
     PE_STATUS_OPTIONAL_HEADER_BAD_MAGIC,
     PE_STATUS_NO_OPTIONAL_HEADER,
     PE_STATUS_OPEN_FAILURE,
     PE_STATUS_NO_DATA,
-    PE_STATUS_MMAP_FAILURE
+    PE_STATUS_MMAP_FAILURE,
+    PE_STATUS_UNSUPPORTED,
+    PE_STATUS_MEMORY_ERROR
 };
 
 struct pefile_dos_header
@@ -200,8 +227,8 @@ struct pefile_section_header
 
 struct pefile_section
 {
-    struct pefile_section_header* header;
-    struct pefile* file;
+    struct pefile_section_header *header;
+    struct pefile *file;
     uint32_t pos;
 };
 
@@ -211,22 +238,33 @@ struct pefile
     struct pefile_pe_header pe_header;
     struct pefile_pe_optional_header optional_header;
     struct pefile_section_header *section_headers;
-    FILE* fd;
-    const char* filename;
+    off_t offset_to_section_headers;
+    FILE *fd;
+    const char *filename;
 };
 
-
 void pefile_init(struct pefile *file);
+PE_STATUS pefile_save_header(struct pefile* file);
 PE_STATUS pefile_load(const char *filename, const char *mode, struct pefile *file);
-struct pefile_section_header* pefile_find_section(struct pefile* file, const char* name);
-struct pefile_section* pefile_open_section(struct pefile* file, const char* name);
-struct pefile_section* pefile_section_open_by_header(struct pefile* file, struct pefile_section_header* header);
-void pefile_section_close(struct pefile_section* section);
-struct pefile_section* pefile_section_read(struct pefile* file, const char* name);
-PE_STATUS pefile_section_seek(struct pefile_section* section, uint32_t offset);
-uint32_t pefile_section_size(struct pefile_section* section);
-uint32_t pefile_section_tell(struct pefile_section* section);
+struct pefile_section_header *pefile_find_section(struct pefile *file, const char *name);
+struct pefile_section *pefile_section_open(struct pefile *file, const char *name);
+struct pefile_section *pefile_section_open_by_header(struct pefile *file, struct pefile_section_header *header);
+void pefile_section_close(struct pefile_section *section);
+PE_STATUS pefile_section_read(struct pefile_section *section, void *out, size_t amount);
+PE_STATUS pefile_section_seek(struct pefile_section *section, uint32_t offset);
+uint32_t pefile_section_size(struct pefile_section *section);
+uint32_t pefile_section_tell(struct pefile_section *section);
+PE_STATUS pefile_section_write(struct pefile_section *section, const void *in, size_t amount);
 
+/**
+ * Creates a section
+ * \param name The name of the section to create only the first 8 bytes are read
+ * \param in The buffer to the section data
+ * \param size The size of the section data
+ * 
+ * \return pefile_section* A pointer to the newly created section. NULL is returned on failure
+ */
+struct pefile_section *pefile_section_create(struct pefile *file, const char *name, const void *in, size_t size, uint32_t characteristics);
 const char *pefile_characteristic(uint16_t *c);
 
 #endif
